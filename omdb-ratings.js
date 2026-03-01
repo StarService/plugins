@@ -4,12 +4,12 @@
     /**
      * OMDB & TOTAL RATINGS (Unified)
      * Developed by: Lampa Users
-     * Version: 1.1
+     * Version: 1.0
      */
 	 
     /* --- Маніфест --- */
     var pluginManifest = {
-        version: '1.1',
+        version: '1.0',
         author: 'Lampa Users',
         docs: 'Private Server',
         contact: 'Private Contact'
