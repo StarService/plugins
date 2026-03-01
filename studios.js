@@ -3,7 +3,7 @@
 
     /**
      * STUDIOS PORTAL (Unified)
-     * Developed by: StarService
+     * Developed by: Lampa Users
      * Version: 1.0
      * Description: Unified studio collections for Lampa (Netflix, HBO, Disney+, etc.)
      * 
