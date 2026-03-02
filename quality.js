@@ -13,7 +13,7 @@
         name: 'QUALITY',
         version: '1.0',
         description: 'Оптимізоване відображення якості з прямим підключенням',
-        author: 'Lampa Users'
+        author: 'Lampa Users',
 		docs: 'Private Server',
         contact: 'Private Contact'
     };
