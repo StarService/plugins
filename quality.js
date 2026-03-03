@@ -250,7 +250,7 @@
                 }
             });
             if (newCards.length) updateCards(newCards);
-        }, 400); 
+        }, 200); 
     });
 
     /* --- Ініціалізація --- */
