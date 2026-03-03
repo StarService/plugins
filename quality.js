@@ -1,126 +1,221 @@
 (function () {
-    "use strict";
-	
-	/**
+    'use strict';
+    
+    /**
      * QUALITY (Unified)
      * Developed by: Lampa Users
      * Version: 1.0
      * Description:
      */
 
-    /* --- Маніфест плагіна --- */
+    /* --- Маніфест плагіна --- 
+       Метадані для відображення в меню налаштувань Lampa. */
     var pluginManifest = {
         name: 'QUALITY',
         version: '1.0',
-        description: 'Оптимізоване відображення якості з прямим підключенням',
+        description: 'Оптимізоване відображення якості для приватного сервера',
         author: 'Lampa Users',
-		docs: 'Private Server',
+        docs: 'Private Server',
         contact: 'Private Contact'
     };
 
-    /* --- Налаштування --- */
-    var JACRED_API = 'https://jacred.xyz/api/v1.0/torrents';
-    var QUALITY_CACHE = 'star_quality_cache';
-    var Q_CACHE_TIME = 24 * 60 * 60 * 1000; 
+    /* --- Основні налаштування --- */
+    var Q_LOGGING = false;                     // Вимкнено для економії ресурсів (true для налагодження)
+    var Q_CACHE_TIME = 24 * 60 * 60 * 1000;    // Кешуємо результат на 24 години
+    var QUALITY_CACHE = 'star_quality_cache';  // Унікальний ключ кешу Lampa Users
+    var JACRED_PROTOCOL = 'https://';          // Використовуємо захищений протокол
+    var JACRED_URL = 'jacred.xyz';             // Пряма адреса джерела метаданих
+    var PROXY_TIMEOUT = 5000;                  // Максимальний час очікування відповіді
 
-    /* --- Стилі (Скляна чорна підкладка) --- */
+    /* Список проксі-серверів для стабільної роботи (обхід CORS) */
+    var PROXY_LIST = [
+        'https://api.allorigins.win/raw?url=',
+        'https://cors.bwa.workers.dev/'
+    ];
+
+    /* --- 3. Стилізація (Преміальний дизайн) --- 
+       Чорна підкладка (0.7), ефект розмиття фону (blur) та білий жирний текст. */
     var style = "<style id=\"star_quality_style\">" +
         ".card__view { position: relative !important; }" +
         ".card__quality_star { " +
-        "    position: absolute !important; " +
-        "    bottom: 8px !important; " +
-        "    left: 4px !important; " +
-        "    z-index: 5; " +
+        "   position: absolute !important; " +
+        "   bottom: 0.6em !important; " +
+        "   left: -0.5em !important; " +
+        "   z-index: 10; " +
         "}" +
         ".card__quality_star div { " +
-        "    background: rgba(0, 0, 0, 0.7) !important; " +
-        "    backdrop-filter: blur(4px); " +
-        "    color: #fff !important; " +
-        "    font-weight: bold !important; " +
-        "    font-size: 12px !important; " +
-        "    border: 1px solid rgba(255, 255, 255, 0.2) !important; " +
-        "    border-radius: 4px !important; " +
-        "    padding: 2px 6px !important; " +
-        "    box-shadow: 0 2px 4px rgba(0,0,0,0.5); " +
+        "   background-color: rgba(0, 0, 0, 0.7) !important; " + // Чорна напівпрозора підкладка
+        "   backdrop-filter: blur(4px); " +                      // Ефект матового скла
+        "   -webkit-backdrop-filter: blur(4px); " +
+        "   color: #FFFFFF !important; " +                       // Білий колір тексту
+        "   font-weight: bold !important; " +
+        "   font-size: 1.1em !important; " +
+        "   border: 1px solid rgba(255, 255, 255, 0.2) !important; " + // Тонка рамка
+        "   border-radius: 4px !important; " +
+        "   padding: 0.2em 0.5em !important; " +
+        "   text-shadow: 0 1px 2px rgba(0,0,0,0.8); " +
         "}" +
         "</style>";
 
+    // Додаємо стилі в систему Lampa
     Lampa.Template.add('star_quality_css', style);
     if (!$('#star_quality_style').length) $('body').append(Lampa.Template.get('star_quality_css', {}, true));
 
-    function getQuality(data, callback) {
-        var uid = Lampa.Storage.get('lampac_unic_id', '');
-        var year = (data.release_date || data.first_air_date || '').substring(0, 4);
-        var title = data.original_title || data.title || data.name;
-        
-        if (!title || !year) return callback(null);
+    /* --- Логіка роботи з даними --- */
 
-        var finalUrl = JACRED_API + '?search=' + encodeURIComponent(title) + '&year=' + year + '&exact=true' + (uid ? '&uid=' + uid : '');
+    // Визначаємо тип контенту (фільм чи серіал)
+    function getCardType(card) {
+        var type = card.media_type || card.type;
+        if (type === 'movie' || type === 'tv') return type;
+        return card.name || card.original_name ? 'tv' : 'movie';
+    }
 
-        // Використовуємо проксі для стабільності, як у твоєму оригіналі
-        var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(finalUrl);
+    // Ротація проксі-серверів для надійності
+    function fetchWithProxy(url, cardId, callback) {
+        var currentProxyIndex = 0;
+        var callbackCalled = false;
 
-        fetch(proxyUrl)
-            .then(r => r.json())
-            .then(json => {
-                if (json && Array.isArray(json) && json.length) {
-                    var maxQ = Math.max.apply(Math, json.map(t => t.quality || 0));
-                    if (maxQ >= 2160) return callback('4K');
-                    if (maxQ >= 1080) return callback('FHD');
-                    if (maxQ >= 720) return callback('HD');
+        function tryNextProxy() {
+            if (currentProxyIndex >= PROXY_LIST.length) {
+                if (!callbackCalled) {
+                    callbackCalled = true;
+                    callback(new Error('All proxies failed'));
                 }
-                callback(null);
-            })
-            .catch(() => callback(null));
+                return;
+            }
+            var proxyUrl = PROXY_LIST[currentProxyIndex] + encodeURIComponent(url);
+            var timeoutId = setTimeout(function() {
+                if (!callbackCalled) {
+                    currentProxyIndex++;
+                    tryNextProxy();
+                }
+            }, PROXY_TIMEOUT);
+
+            fetch(proxyUrl)
+                .then(function(r) { 
+                    clearTimeout(timeoutId);
+                    return r.text(); 
+                })
+                .then(function(data) {
+                    if (!callbackCalled) {
+                        callbackCalled = true;
+                        callback(null, data);
+                    }
+                })
+                .catch(function() {
+                    clearTimeout(timeoutId);
+                    if (!callbackCalled) {
+                        currentProxyIndex++;
+                        tryNextProxy();
+                    }
+                });
+        }
+        tryNextProxy();
     }
 
-    /* --- Решта логіки (Кешування та MutationObserver) залишається моєю оптимізованою --- */
-    function apply(card, q, key) {
-        if (!card || !q || card.querySelector('.card__quality_star')) return;
-        $(card.querySelector('.card__view')).append('<div class="card__quality_star"><div>' + q + '</div></div>');
-        card.setAttribute('data-star-q', 'true');
-        var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
-        cache[key] = { q: q, t: Date.now() };
-        Lampa.Storage.set(QUALITY_CACHE, cache);
+    // Основна функція запиту до JacRed
+    function getBestReleaseFromJacred(normalizedCard, cardId, callback) {
+        function translateQuality(quality) {
+            if (quality >= 2160) return '4K';
+            if (quality >= 1080) return 'FHD';
+            if (quality >= 720) return 'HD';
+            return null;
+        }
+
+        var year = (normalizedCard.release_date || '').substring(0, 4);
+        if (!year || isNaN(year)) return callback(null);
+
+        // Спроба отримати UID, якщо він є (для розширених результатів)
+        var userId = Lampa.Storage.get('lampac_unic_id', '');
+        var title = normalizedCard.original_title || normalizedCard.title;
+        
+        // Формуємо URL запиту
+        var apiUrl = JACRED_PROTOCOL + JACRED_URL + '/api/v1.0/torrents?search=' +
+            encodeURIComponent(title) + '&year=' + year + '&exact=true' + (userId ? '&uid=' + userId : '');
+
+        fetchWithProxy(apiUrl, cardId, function(err, responseText) {
+            if (err || !responseText) return callback(null);
+            try {
+                var torrents = JSON.parse(responseText);
+                if (Array.isArray(torrents) && torrents.length > 0) {
+                    // Шукаємо торрент з найвищою якістю
+                    var maxQ = Math.max.apply(Math, torrents.map(function(t) { return t.quality || 0; }));
+                    callback({ quality: translateQuality(maxQ) });
+                } else callback(null);
+            } catch (e) { callback(null); }
+        });
     }
 
-    function process(cards) {
-        cards.forEach(card => {
-            var d = card.card_data;
-            if (!d || card.hasAttribute('data-star-q')) return;
-            var key = (d.media_type || 'movie') + '_' + d.id;
+    /* --- Візуалізація та кешування --- */
+
+    // Малюємо значок якості на картці
+    function applyQualityToCard(card, quality, qCacheKey) {
+        if (!card || !quality || card.hasAttribute('data-star-q')) return;
+        var cardView = card.querySelector('.card__view');
+        if (cardView) {
+            // Очищуємо старі значки, якщо вони випадково залишились
+            $(cardView).find('.card__quality_star').remove();
+            
+            // Додаємо новий значок
+            $(cardView).append('<div class="card__quality_star"><div>' + quality + '</div></div>');
+            card.setAttribute('data-star-q', 'true');
+            
+            // Зберігаємо в локальне сховище
             var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
-            if (cache[key] && (Date.now() - cache[key].t < Q_CACHE_TIME)) {
-                apply(card, cache[key].q, key);
+            cache[qCacheKey] = { q: quality, t: Date.now() };
+            Lampa.Storage.set(QUALITY_CACHE, cache);
+        }
+    }
+
+    // Обробка масиву карток
+    function updateCards(cards) {
+        cards.forEach(function(card) {
+            if (card.hasAttribute('data-star-q')) return;
+            var data = card.card_data;
+            if (!data) return;
+
+            var qCacheKey = getCardType(data) + '_' + data.id;
+            var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
+            
+            // Перевіряємо кеш
+            if (cache[qCacheKey] && (Date.now() - cache[qCacheKey].t < Q_CACHE_TIME)) {
+                applyQualityToCard(card, cache[qCacheKey].q, qCacheKey);
             } else {
-                getQuality(d, (q) => {
-                    if (q) apply(card, q, key);
-                    else card.setAttribute('data-star-q', 'none');
+                // Запитуємо API
+                getBestReleaseFromJacred(data, data.id, function(res) {
+                    if (res && res.quality) applyQualityToCard(card, res.quality, qCacheKey);
+                    else card.setAttribute('data-star-q', 'none'); // Щоб не мучити сервер повторно
                 });
             }
         });
     }
 
-    function init() {
-        if (window.star_q_loaded) return;
-        window.star_q_loaded = true;
-        
-        var timer;
-        var observer = new MutationObserver(() => {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                var cards = document.querySelectorAll('.card:not([data-star-q])');
-                if (cards.length) process(Array.from(cards));
-            }, 800); // Оптимізована затримка для ТБ
-        });
-        
+    /* --- Оптимізований Observer --- 
+       Ми використовуємо дебаунс (debounce) на 800мс. Коли ти гортаєш стрічку,
+       плагін не запускається для кожної картки окремо, а чекає зупинки,
+       збирає всі нові картки і обробляє їх пачкою. Це прибирає фризи на ТБ. */
+    var timer;
+    var observer = new MutationObserver(function (mutations) {
+        clearTimeout(timer);
+        timer = setTimeout(function() {
+            var newCards = document.querySelectorAll('.card:not([data-star-q])');
+            if (newCards.length) updateCards(Array.from(newCards));
+        }, 800); 
+    });
+
+    /* --- Ініціалізація --- */
+    function startPlugin() {
+        // Починаємо спостереження за змінами в інтерфейсі
         observer.observe(document.body, { childList: true, subtree: true });
-        setTimeout(() => {
-            var items = document.querySelectorAll('.card');
-            if (items.length) process(Array.from(items));
-        }, 2000);
+        
+        // Обробляємо ті картки, що вже є на екрані при старті
+        var existing = document.querySelectorAll('.card');
+        if (existing.length) updateCards(Array.from(existing));
     }
 
-    if (window.appready) init();
-    else Lampa.Listener.follow("app", function (e) { if (e.type == "ready") init(); });
+    // Запобігаємо подвійному запуску
+    if (!window.starQualityPlugin) {
+        window.starQualityPlugin = true;
+        startPlugin();
+    }
 })();
