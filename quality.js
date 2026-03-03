@@ -5,11 +5,11 @@
      * QUALITY (Unified)
      * Developed by: Lampa Users
      * Version: 1.0
-     * Description:
+     * Description: Оптимізований плагін для відображення якості контенту з ефектом Glassmorphism.
      */
 
     /* --- Маніфест плагіна --- 
-       Метадані для відображення в меню налаштувань Lampa. */
+       Метадані для системи Lampa, що відображаються в налаштуваннях. */
     var pluginManifest = {
         name: 'QUALITY',
         version: '1.0',
@@ -19,58 +19,64 @@
         contact: 'Private Contact'
     };
 
-    /* --- Основні налаштування --- */
-    var Q_LOGGING = false;                     // Вимкнено для економії ресурсів (true для налагодження)
-    var Q_CACHE_TIME = 24 * 60 * 60 * 1000;    // Кешуємо результат на 24 години
-    var QUALITY_CACHE = 'star_quality_cache';  // Унікальний ключ кешу Lampa Users
-    var JACRED_PROTOCOL = 'https://';          // Використовуємо захищений протокол
-    var JACRED_URL = 'jacred.xyz';             // Пряма адреса джерела метаданих
-    var PROXY_TIMEOUT = 5000;                  // Максимальний час очікування відповіді
-
-    /* Список проксі-серверів для стабільної роботи (обхід CORS) */
+    /* --- Основні налаштування та обгортка --- */
+    var Q_LOGGING = true;                                              // Логування в консоль (STAR-RATINGS)
+    var Q_CACHE_TIME = 24 * 60 * 60 * 1000;                            // Кешуємо результат на 24 години
+    var QUALITY_CACHE = 'star_ratings_quality_cache';                  // Унікальний ключ кешу (замінено на star)
+    var JACRED_PROTOCOL = 'https://';                                  // Використовуємо захищений протокол
+    var JACRED_URL = Lampa.Storage.get('jacred.xyz') || 'jacred.xyz';  // Пряма адреса джерела метаданих
+    var PROXY_TIMEOUT = 5000;                                          // Максимальний час очікування відповіді
+    
+    /* Список проксі-серверів для обходу CORS обмежень браузера */
     var PROXY_LIST = [
         'https://api.allorigins.win/raw?url=',
         'https://cors.bwa.workers.dev/'
     ];
 
-    /* --- 3. Стилізація (Преміальний дизайн) --- 
-       Чорна підкладка (0.7), ефект розмиття фону (blur) та білий жирний текст. */
-    var style = "<style id=\"star_quality_style\">" +
+    /* --- Стилізація (Преміальний дизайн) --- 
+       Збережено твою оригінальну геометрію (0.5em / -0.8em / 1.2em).
+       Додано ефект "багатості" (blur) для дорожчого вигляду. */
+    var style = "<style id=\"star_ratings_quality_css\">" +
         ".card__view { position: relative !important; }" +
-        ".card__quality_star { " +
+        ".card__quality { " +
         "   position: absolute !important; " +
-        "   bottom: 0.6em !important; " +
-        "   left: -0.5em !important; " +
+        "   bottom: 0.5em !important; " +   
+        "   left: -0.8em !important; " + 
+        "   background-color: transparent !important; " +
         "   z-index: 10; " +
+        "   width: fit-content !important; " +
+        "   max-width: calc(100% - 1em) !important; " +
         "}" +
-        ".card__quality_star div { " +
-        "   background-color: rgba(0, 0, 0, 0.7) !important; " + // Чорна напівпрозора підкладка
-        "   backdrop-filter: blur(4px); " +                      // Ефект матового скла
-        "   -webkit-backdrop-filter: blur(4px); " +
-        "   color: #FFFFFF !important; " +                       // Білий колір тексту
-        "   font-weight: bold !important; " +
-        "   font-size: 1.1em !important; " +
-        "   border: 1px solid rgba(255, 255, 255, 0.2) !important; " + // Тонка рамка
-        "   border-radius: 4px !important; " +
-        "   padding: 0.2em 0.5em !important; " +
-        "   text-shadow: 0 1px 2px rgba(0,0,0,0.8); " +
+        ".card__quality div { " +
+        "   text-transform: none !important; " +
+        "   border: 1px solid #FFFFFF !important; " +   /* Біла рамка */
+        "   background-color: rgba(0, 0, 0, 0.7) !important; " + 
+        "   backdrop-filter: blur(4px); " +              /* Ефект розмиття фону */
+        "   -webkit-backdrop-filter: blur(4px); " +      /* Підтримка для старих TV */
+        "   color: #FFFFFF !important; " +               /* Білий текст */
+        "   font-weight: bold !important; " + 
+        "   font-style: normal !important; " +
+        "   font-size: 1.2em !important; " +
+        "   border-radius: 3px !important; " +
+        "   padding: 0.2em 0.4em !important; " +
+		"   box-shadow: 0 2px 4px rgba(0,0,0,0.5); " +   /* Тінь для об'єму */
         "}" +
         "</style>";
 
-    // Додаємо стилі в систему Lampa
-    Lampa.Template.add('star_quality_css', style);
-    if (!$('#star_quality_style').length) $('body').append(Lampa.Template.get('star_quality_css', {}, true));
+    // Додавання стилів у документ через вбудований шаблон Lampa
+    Lampa.Template.add('star_ratings_quality_css', style);
+    if (!$('#star_ratings_quality_css').length) $('body').append(Lampa.Template.get('star_ratings_quality_css', {}, true));
 
     /* --- Логіка роботи з даними --- */
 
-    // Визначаємо тип контенту (фільм чи серіал)
+    /* Визначаємо тип контенту: фільм чи серіал */
     function getCardType(card) {
         var type = card.media_type || card.type;
         if (type === 'movie' || type === 'tv') return type;
         return card.name || card.original_name ? 'tv' : 'movie';
     }
 
-    // Ротація проксі-серверів для надійності
+    /* Робота з проксі: послідовне опитування серверів при помилках */
     function fetchWithProxy(url, cardId, callback) {
         var currentProxyIndex = 0;
         var callbackCalled = false;
@@ -84,6 +90,8 @@
                 return;
             }
             var proxyUrl = PROXY_LIST[currentProxyIndex] + encodeURIComponent(url);
+            if (Q_LOGGING) console.log("STAR-RATINGS", "card: " + cardId + ", Fetch with proxy: " + proxyUrl);
+            
             var timeoutId = setTimeout(function() {
                 if (!callbackCalled) {
                     currentProxyIndex++;
@@ -94,6 +102,7 @@
             fetch(proxyUrl)
                 .then(function(r) { 
                     clearTimeout(timeoutId);
+                    if (!r.ok) throw new Error('Status: ' + r.status);
                     return r.text(); 
                 })
                 .then(function(data) {
@@ -102,7 +111,7 @@
                         callback(null, data);
                     }
                 })
-                .catch(function() {
+                .catch(function(error) {
                     clearTimeout(timeoutId);
                     if (!callbackCalled) {
                         currentProxyIndex++;
@@ -113,34 +122,40 @@
         tryNextProxy();
     }
 
-    // Основна функція запиту до JacRed
+    /* Отримання найкращого релізу з JacRed */
     function getBestReleaseFromJacred(normalizedCard, cardId, callback) {
         function translateQuality(quality) {
+            if (typeof quality !== 'number') return quality;
             if (quality >= 2160) return '4K';
             if (quality >= 1080) return 'FHD';
             if (quality >= 720) return 'HD';
+            if (quality > 0) return 'SD';
             return null;
         }
 
         var year = (normalizedCard.release_date || '').substring(0, 4);
         if (!year || isNaN(year)) return callback(null);
 
-        // Спроба отримати UID, якщо він є (для розширених результатів)
-        var userId = Lampa.Storage.get('lampac_unic_id', '');
+        var uid = Lampa.Storage.get('lampac_unic_id', '');
         var title = normalizedCard.original_title || normalizedCard.title;
-        
-        // Формуємо URL запиту
         var apiUrl = JACRED_PROTOCOL + JACRED_URL + '/api/v1.0/torrents?search=' +
-            encodeURIComponent(title) + '&year=' + year + '&exact=true' + (userId ? '&uid=' + userId : '');
+            encodeURIComponent(title) + '&year=' + year + '&exact=true' + (uid ? '&uid=' + uid : '');
 
         fetchWithProxy(apiUrl, cardId, function(err, responseText) {
             if (err || !responseText) return callback(null);
             try {
                 var torrents = JSON.parse(responseText);
                 if (Array.isArray(torrents) && torrents.length > 0) {
-                    // Шукаємо торрент з найвищою якістю
-                    var maxQ = Math.max.apply(Math, torrents.map(function(t) { return t.quality || 0; }));
-                    callback({ quality: translateQuality(maxQ) });
+                    // Фільтрація екранок (твій оригінал)
+                    var filtered = torrents.filter(function(t) {
+                        var low = (t.title || '').toLowerCase();
+                        return !/\b(ts|telesync|camrip|cam)\b/i.test(low) || (t.quality || 0) >= 720;
+                    });
+                    
+                    if (filtered.length) {
+                        var maxQ = Math.max.apply(Math, filtered.map(function(t) { return t.quality || 0; }));
+                        callback({ quality: translateQuality(maxQ) });
+                    } else callback(null);
                 } else callback(null);
             } catch (e) { callback(null); }
         });
@@ -148,43 +163,68 @@
 
     /* --- Візуалізація та кешування --- */
 
-    // Малюємо значок якості на картці
-    function applyQualityToCard(card, quality, qCacheKey) {
-        if (!card || !quality || card.hasAttribute('data-star-q')) return;
+    function getQualityCache(key) {
+        var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
+        var item = cache[key];
+        return item && (Date.now() - item.timestamp < Q_CACHE_TIME) ? item : null;
+    }
+
+    function saveQualityCache(key, quality, localId) {
+        if (Q_LOGGING) console.log("STAR-RATINGS", "card: " + localId + ", quality: Save quality cache");
+        var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
+        cache[key] = { quality: quality, timestamp: Date.now() };
+        Lampa.Storage.set(QUALITY_CACHE, cache);
+    }
+
+    /* Нанесення значка якості на картку */
+    function applyQualityToCard(card, quality, source, qCacheKey) {
+        if (!document.body.contains(card)) return;
+        
+        card.setAttribute('data-star-q', 'true'); // Тепер тут star
         var cardView = card.querySelector('.card__view');
-        if (cardView) {
-            // Очищуємо старі значки, якщо вони випадково залишились
-            $(cardView).find('.card__quality_star').remove();
-            
-            // Додаємо новий значок
-            $(cardView).append('<div class="card__quality_star"><div>' + quality + '</div></div>');
-            card.setAttribute('data-star-q', 'true');
-            
-            // Зберігаємо в локальне сховище
-            var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
-            cache[qCacheKey] = { q: quality, t: Date.now() };
-            Lampa.Storage.set(QUALITY_CACHE, cache);
+        if (!cardView) return;
+
+        $(cardView).find('.card__quality').remove();
+
+        if (source === 'JacRed' && quality && quality !== 'none') {
+            var cardId = card.card_data ? card.card_data.id : 'unknown';
+            saveQualityCache(qCacheKey, quality, cardId);
+        }
+
+        if (quality && quality !== 'none') {
+            var qualityDiv = document.createElement('div');
+            qualityDiv.className = 'card__quality';
+            var qualityInner = document.createElement('div');
+            qualityInner.textContent = quality;
+            qualityDiv.appendChild(qualityInner);
+            cardView.appendChild(qualityDiv);
         }
     }
 
-    // Обробка масиву карток
+    /* Обробка карток: перевірка кешу або запит до JacRed */
     function updateCards(cards) {
         cards.forEach(function(card) {
             if (card.hasAttribute('data-star-q')) return;
             var data = card.card_data;
             if (!data) return;
 
-            var qCacheKey = getCardType(data) + '_' + data.id;
-            var cache = Lampa.Storage.get(QUALITY_CACHE) || {};
+            var normalized = {
+                id: data.id || '',
+                title: data.title || data.name || '',
+                original_title: data.original_title || data.original_name || '',
+                release_date: data.release_date || data.first_air_date || '',
+                type: getCardType(data)
+            };
+
+            var qCacheKey = normalized.type + '_' + normalized.id;
+            var cache = getQualityCache(qCacheKey);
             
-            // Перевіряємо кеш
-            if (cache[qCacheKey] && (Date.now() - cache[qCacheKey].t < Q_CACHE_TIME)) {
-                applyQualityToCard(card, cache[qCacheKey].q, qCacheKey);
+            if (cache) {
+                if (Q_LOGGING) console.log("STAR-RATINGS", "card: " + normalized.id + ", quality: Get from cache");
+                applyQualityToCard(card, cache.quality, 'Cache', qCacheKey);
             } else {
-                // Запитуємо API
-                getBestReleaseFromJacred(data, data.id, function(res) {
-                    if (res && res.quality) applyQualityToCard(card, res.quality, qCacheKey);
-                    else card.setAttribute('data-star-q', 'none'); // Щоб не мучити сервер повторно
+                getBestReleaseFromJacred(normalized, normalized.id, function(res) {
+                    applyQualityToCard(card, res ? res.quality : 'none', 'JacRed', qCacheKey);
                 });
             }
         });
@@ -198,24 +238,46 @@
     var observer = new MutationObserver(function (mutations) {
         clearTimeout(timer);
         timer = setTimeout(function() {
-            var newCards = document.querySelectorAll('.card:not([data-star-q])');
-            if (newCards.length) updateCards(Array.from(newCards));
-        }, 800); 
+            var newCards = [];
+            mutations.forEach(function(m) {
+                if (m.addedNodes) {
+                    m.addedNodes.forEach(function(n) {
+                        if (n.nodeType === 1) {
+                            if (n.classList.contains('card')) newCards.push(n);
+                            n.querySelectorAll('.card').forEach(function(c) { newCards.push(c); });
+                        }
+                    });
+                }
+            });
+            if (newCards.length) updateCards(newCards);
+        }, 400); 
     });
 
     /* --- Ініціалізація --- */
     function startPlugin() {
-        // Починаємо спостереження за змінами в інтерфейсі
-        observer.observe(document.body, { childList: true, subtree: true });
+        if (Q_LOGGING) console.log("STAR-RATINGS-QUALITY", "Plugin started!");
         
-        // Обробляємо ті картки, що вже є на екрані при старті
-        var existing = document.querySelectorAll('.card');
-        if (existing.length) updateCards(Array.from(existing));
+        // Налаштування по замовчуванню (з префіксом star)
+        if (!localStorage.getItem('star_ratings_quality')) {
+            localStorage.setItem('star_ratings_quality', 'true');
+        }
+        if (!localStorage.getItem('star_ratings_quality_inlist')) {
+            localStorage.setItem('star_ratings_quality_inlist', 'true');
+        }
+        if (!localStorage.getItem('star_ratings_quality_tv')) {
+            localStorage.setItem('star_ratings_quality_tv', 'false');
+        }
+
+        if (localStorage.getItem('star_ratings_quality_inlist') === 'true') {
+            observer.observe(document.body, { childList: true, subtree: true });
+            var existing = document.querySelectorAll('.card');
+            if (existing.length) updateCards(Array.from(existing));
+        }
     }
 
-    // Запобігаємо подвійному запуску
-    if (!window.starQualityPlugin) {
-        window.starQualityPlugin = true;
+    // Захист від подвійного запуску
+    if (!window.starRatingsQualityPlugin) {
+        window.starRatingsQualityPlugin = true;
         startPlugin();
     }
 })();
