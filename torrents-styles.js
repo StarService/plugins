@@ -2,111 +2,112 @@
     "use strict";
 
     /**
-     * Torrent Styles (Unified)
+     * Torrent Styles (Premium Emerald)
      * Developed by: Lampa Users
      * Version: 1.0
-     * Description: Кольорові індикатори для торрентів (UA/EN: Роздають, Качають, Бітрейт, ГБ).
+     * UI Theme: Emerald Glassmorphism
      */
 
     /* --- Маніфест плагіна (відображається в налаштуваннях) --- */
     var pluginManifest = {
-        name: 'Torrent Styles Multi',
+        name: 'Torrent Styles Premium',
         version: '1.0',
-        description: 'Універсальна стилізація: підтримує UA/EN мови, будь-який регістр букв та двокрапки',
+        description: 'Професійна стилізація торрентів: градієнти, світіння та розумна логіка (UA/EN)',
         author: 'Lampa Users',
         docs: 'Private Server',
         contact: 'Private Contact'
     };
 
-    /* --- Візуальні стилі (CSS) --- */
+    /* --- Пороги (Thresholds) --- */
+    var TH = {
+        seeds: { danger: 5, good: 10, top: 20 },
+        bitrate: { high: 50, very_high: 100 },
+        size: { mid: 50, high: 100, top: 200 },
+        debounce: 60
+    };
+
+    /* --- Преміальний дизайн (CSS) --- */
     var style = '<style>' +
-        '.ts-badge { display: inline-flex !important; padding: 0.15em 0.5em !important; border-radius: 0.5em !important; font-weight: bold !important; margin-right: 0.6em !important; font-size: 0.9em !important; border: 1px solid transparent !important; white-space: nowrap !important; }' +
-        /* Роздають / Seeds */
-        '.ts-seeds { color: #5cd4b0; background: rgba(92, 212, 176, 0.15); border-color: #5cd4b0 !important; } ' +
-        '.ts-seeds.low { color: #ff5f6d; border-color: #ff5f6d !important; } ' +
-        '.ts-seeds.high { color: #ffc371; border-color: #ffc371 !important; } ' +
-        /* Качають / Leechers */
-        '.ts-grabs { color: #4db6ff; background: rgba(77, 182, 255, 0.15); border-color: #4db6ff !important; } ' +
-        /* Бітрейт / Bitrate */
-        '.ts-bitrate { color: #ffc371; background: rgba(255, 195, 113, 0.1); border-color: #ffc371 !important; } ' +
-        /* ГБ / GB (Розмір) */
-        '.ts-size { color: #43cea2; background: rgba(67, 206, 162, 0.15); border-color: #43cea2 !important; } ' +
+        // Базовий вигляд бейджів
+        '.ts-badge { display: inline-flex !important; align-items: center; justify-content: center; min-height: 1.7em; padding: 0.15em 0.5em !important; border-radius: 0.5em !important; font-weight: 700 !important; font-size: 0.9em !important; margin-right: 0.55em !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; border: 0.15em solid transparent !important; }' +
+        
+        // СІДИ (Seeds)
+        '.ts-seeds { color: #5cd4b0; background: rgba(92, 212, 176, 0.14); border-color: rgba(92, 212, 176, 0.9) !important; box-shadow: 0 0 0.75em rgba(92, 212, 176, 0.28); }' +
+        '.ts-seeds.low { color: #ff5f6d; background: rgba(255, 95, 109, 0.14); border-color: rgba(255, 95, 109, 0.82) !important; box-shadow: 0 0 0.65em rgba(255, 95, 109, 0.26); }' +
+        '.ts-seeds.good { color: #43cea2; background: rgba(67, 206, 162, 0.16); border-color: rgba(67, 206, 162, 0.92) !important; box-shadow: 0 0 0.9em rgba(67, 206, 162, 0.34); }' +
+        '.ts-seeds.top { color: #ffc371; background: linear-gradient(135deg, rgba(255, 195, 113, 0.28), rgba(67, 206, 162, 0.1)) !important; border-color: rgba(255, 195, 113, 0.92) !important; box-shadow: 0 0 0.95em rgba(255, 195, 113, 0.38); }' +
+
+        // ПІРИ (Leechers)
+        '.ts-grabs { color: #4db6ff; background: rgba(77, 182, 255, 0.12); border-color: rgba(77, 182, 255, 0.82) !important; box-shadow: 0 0 0.35em rgba(77, 182, 255, 0.16); }' +
+
+        // БІТРЕЙТ (Speed)
+        '.ts-bitrate { color: #5cd4b0; background: rgba(67, 206, 162, 0.1); border-color: rgba(92, 212, 176, 0.78) !important; }' +
+        '.ts-bitrate.high { color: #ffc371; background: linear-gradient(135deg, rgba(255, 195, 113, 0.28), rgba(67, 206, 162, 0.1)) !important; border-color: rgba(255, 195, 113, 0.92) !important; }' +
+        '.ts-bitrate.danger { color: #ff5f6d; background: linear-gradient(135deg, rgba(255, 95, 109, 0.28), rgba(67, 206, 162, 0.08)) !important; border-color: rgba(255, 95, 109, 0.92) !important; }' +
+
+        // РОЗМІР (Size)
+        '.ts-size { color: #5cd4b0; background: rgba(92, 212, 176, 0.12); border-color: rgba(92, 212, 176, 0.82) !important; }' +
+        '.ts-size.mid { color: #43cea2; border-color: rgba(67, 206, 162, 0.92) !important; }' +
+        '.ts-size.high { color: #ffc371; background: linear-gradient(135deg, rgba(255, 195, 113, 0.28), rgba(67, 206, 162, 0.1)) !important; border-color: rgba(255, 195, 113, 0.95) !important; }' +
+        '.ts-size.top { color: #ff5f6d; background: linear-gradient(135deg, rgba(255, 95, 109, 0.28), rgba(67, 206, 162, 0.08)) !important; border-color: rgba(255, 95, 109, 0.95) !important; }' +
+        
+        // Фокус на картці
+        '.torrent-item.selector.focus { box-shadow: 0 0 0 0.3em rgba(67, 206, 162, 0.4) !important; }' +
         '</style>';
 
-    // Впровадження стилів у head документа
-    if (!$('style#ts-mod-final-pro').length) $('head').append('<style id="ts-mod-final-pro">' + style + '</style>');
+    if (!$('style#ts-premium-emerald').length) $('head').append('<style id="ts-premium-emerald">' + style + '</style>');
 
-    /* --- Функції обробки даних --- */
-
-    /**
-     * Витягує перше число з рядка.
-     * Працює з: "Роздають: 383", "Bitrate: 8.92 Mbps", "15,5 ГБ"
-     */
+    /* --- Логіка парсингу --- */
     function extractNumber(text) {
         var match = (text || '').replace(',', '.').match(/\d+(\.\d+)?/);
         return match ? parseFloat(match[0]) : 0;
     }
 
-    /**
-     * Основна функція оновлення стилів.
-     * Сканує блоки деталей торрента та вішає класи залежно від знайдених слів.
-     */
     function updateStyles() {
-        // Проходимо по всіх div та span у контейнері деталей торрента
         $('.torrent-item__details > div, .torrent-item__details > span').each(function () {
             var $el = $(this);
-            var text = $el.text().toLowerCase(); // Перетворюємо на малі літери для ігнорування регістру
+            var text = $el.text().toLowerCase();
+            $el.removeClass('ts-badge ts-seeds ts-grabs ts-bitrate ts-size low good top mid high danger');
 
-            // 1. РОЗДАЮТЬ / SEEDS
+            // 🟢 РОЗДАЮТЬ / SEEDS
             if (text.indexOf('роздають') !== -1 || text.indexOf('seeds') !== -1) {
-                var val = extractNumber(text);
-                $el.addClass('ts-badge ts-seeds').removeClass('low high');
-                if (val < 5) $el.addClass('low');
-                else if (val > 50) $el.addClass('high');
+                var s = extractNumber(text);
+                $el.addClass('ts-badge ts-seeds');
+                if (s < TH.seeds.danger) $el.addClass('low');
+                else if (s >= TH.seeds.top) $el.addClass('top');
+                else if (s >= TH.seeds.good) $el.addClass('good');
             }
-
-            // 2. КАЧАЮТЬ / LEECHERS / PEERS
+            // 🔵 КАЧАЮТЬ / PEERS
             else if (text.indexOf('качають') !== -1 || text.indexOf('leechers') !== -1 || text.indexOf('peers') !== -1) {
                 $el.addClass('ts-badge ts-grabs');
             }
-
-            // 3. БІТРЕЙТ / BITRATE
+            // 🟡 БІТРЕЙТ / BITRATE
             else if (text.indexOf('бітрейт') !== -1 || text.indexOf('bitrate') !== -1) {
+                var br = extractNumber(text);
                 $el.addClass('ts-badge ts-bitrate');
+                if (br > TH.bitrate.very_high) $el.addClass('danger');
+                else if (br >= TH.bitrate.high) $el.addClass('top');
             }
-
-            // 4. ГБ / GB / ТБ / TB (Розмір файлу)
-            else if (text.indexOf('гб') !== -1 || text.indexOf('gb') !== -1 || text.indexOf('тб') !== -1 || text.indexOf('tb') !== -1) {
+            // 🟢 ГБ / GB (Об'єм)
+            else if (text.indexOf('гб') !== -1 || text.indexOf('gb') !== -1) {
+                var sz = extractNumber(text);
                 $el.addClass('ts-badge ts-size');
+                if (sz > TH.size.top) $el.addClass('top');
+                else if (sz >= TH.size.high) $el.addClass('high');
+                else if (sz >= TH.size.mid) $el.addClass('mid');
             }
         });
     }
 
-    /* --- Впровадження та ініціалізація --- */
+    /* --- Запуск --- */
     function init() {
-        // MutationObserver стежить за появою нових торрентів у списку
-        var observer = new MutationObserver(function() {
-            setTimeout(updateStyles, 100);
-        });
-        
+        var observer = new MutationObserver(function() { setTimeout(updateStyles, TH.debounce); });
         observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-        
-        // Реєстрація плагіна в Lampa
-        if (window.Lampa) {
-            Lampa.Manifest.plugins = Lampa.Manifest.plugins || {};
-            Lampa.Manifest.plugins['torrent_styles_mod'] = pluginManifest;
-        }
-        
-        updateStyles(); // Запуск при ініціалізації
+        if (window.Lampa) Lampa.Manifest.plugins['torrent_styles_mod'] = pluginManifest;
+        updateStyles();
     }
 
-    // Запуск після готовності додатку
-    if (window.appready) {
-        init();
-    } else {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') init();
-        });
-    }
+    if (window.appready) init();
+    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') init(); });
 
 })();
