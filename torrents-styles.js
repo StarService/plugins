@@ -4,152 +4,109 @@
     /**
      * Torrent Styles (Unified)
      * Developed by: Lampa Users
-     * Version: 1.0.0
-     * Description: Розумна стилізація та кольорове маркування торрент-роздач.
+     * Version: 1.0
+     * Description: Кольорові індикатори для торрентів (UA/EN: Роздають, Качають, Бітрейт, ГБ).
      */
 
     /* --- Маніфест плагіна (відображається в налаштуваннях) --- */
     var pluginManifest = {
-        name: 'Torrent Styles Mod',
-        version: '1.0.0',
-        description: 'Кольорове маркування сідів, бітрейту та розміру торрентів',
+        name: 'Torrent Styles Multi',
+        version: '1.0',
+        description: 'Універсальна стилізація: підтримує UA/EN мови, будь-який регістр букв та двокрапки',
         author: 'Lampa Users',
         docs: 'Private Server',
         contact: 'Private Contact'
     };
 
-    var config = {
-        pluginId: 'torrent_styles_mod'
-    };
-
-    /* --- Пороги та налаштування --- */
-    var TH = {
-        seeds: {
-            danger_below: 5,  // Червоний, якщо мало сідів
-            good_from: 10,    // Смарагдовий
-            top_from: 20      // Золотий
-        },
-        bitrate: {
-            warn_from: 50,    // Золотий
-            danger_from: 100  // Червоний (дуже важкий файл)
-        },
-        size: {
-            mid_from_gb: 50,
-            high_from_gb: 100,
-            top_from_gb: 200
-        },
-        debounce_ms: 60 // Затримка оновлення для плавності інтерфейсу
-    };
-
     /* --- Візуальні стилі (CSS) --- */
-    var styles = {
-        '.torrent-item__details': { 'font-size': '0.9em' },
-        
-        // Базовий вигляд бейджів (Glassmorphism)
-        '.torrent-item__bitrate > span.ts-bitrate, .torrent-item__seeds > span.ts-seeds, .torrent-item__grabs > span.ts-grabs, .torrent-item__size.ts-size': {
-            'display': 'inline-flex',
-            'align-items': 'center',
-            'justify-content': 'center',
-            'min-height': '1.7em',
-            'padding': '0.15em 0.45em',
-            'border-radius': '0.5em',
-            'font-weight': '700',
-            'font-size': '0.9em',
-            'font-variant-numeric': 'tabular-nums', // Однаковий розмір цифр для рівності
-            'white-space': 'nowrap'
-        },
+    var style = '<style>' +
+        '.ts-badge { display: inline-flex !important; padding: 0.15em 0.5em !important; border-radius: 0.5em !important; font-weight: bold !important; margin-right: 0.6em !important; font-size: 0.9em !important; border: 1px solid transparent !important; white-space: nowrap !important; }' +
+        /* Роздають / Seeds */
+        '.ts-seeds { color: #5cd4b0; background: rgba(92, 212, 176, 0.15); border-color: #5cd4b0 !important; } ' +
+        '.ts-seeds.low { color: #ff5f6d; border-color: #ff5f6d !important; } ' +
+        '.ts-seeds.high { color: #ffc371; border-color: #ffc371 !important; } ' +
+        /* Качають / Leechers */
+        '.ts-grabs { color: #4db6ff; background: rgba(77, 182, 255, 0.15); border-color: #4db6ff !important; } ' +
+        /* Бітрейт / Bitrate */
+        '.ts-bitrate { color: #ffc371; background: rgba(255, 195, 113, 0.1); border-color: #ffc371 !important; } ' +
+        /* ГБ / GB (Розмір) */
+        '.ts-size { color: #43cea2; background: rgba(67, 206, 162, 0.15); border-color: #43cea2 !important; } ' +
+        '</style>';
 
-        // Кольори для Сідів
-        '.torrent-item__seeds > span.ts-seeds': { color: '#5cd4b0', 'background-color': 'rgba(92, 212, 176, 0.14)', border: '0.15em solid rgba(92, 212, 176, 0.9)' },
-        '.torrent-item__seeds > span.ts-seeds.low-seeds': { color: '#ff5f6d', 'background-color': 'rgba(255, 95, 109, 0.14)', border: '0.15em solid rgba(255, 95, 109, 0.82)' },
-        '.torrent-item__seeds > span.ts-seeds.high-seeds': { color: '#ffc371', background: 'linear-gradient(135deg, rgba(255, 195, 113, 0.28), rgba(67, 206, 162, 0.10))', border: '0.15em solid rgba(255, 195, 113, 0.92)' },
-
-        // Стилі фокусу (виділення картки пультом)
-        '.torrent-item.selector.focus': { 'box-shadow': '0 0 0 0.3em rgba(67, 206, 162, 0.4)' },
-        '.torrent-item.focus::after': { border: '0.24em solid #5cd4b0', 'border-radius': '0.9em' }
-    };
+    // Впровадження стилів у head документа
+    if (!$('style#ts-mod-final-pro').length) $('head').append('<style id="ts-mod-final-pro">' + style + '</style>');
 
     /* --- Функції обробки даних --- */
 
-    // Парсинг розміру (підтримує ГБ, ТБ, МБ та їх англійські аналоги)
-    function tsParseSizeToGb(text) {
-        try {
-            var t = ((text || '') + '').replace(/\u00A0/g, ' ').trim();
-            var m = t.match(/(\d+(?:[.,]\d+)?)\s*(kb|mb|gb|tb|кб|мб|гб|тб)/i);
-            if (!m) return null;
-            var num = parseFloat(m[1].replace(',', '.')) || 0;
-            var unit = m[2].toLowerCase();
-            if (unit === 'tb' || unit === 'тб') return num * 1024;
-            if (unit === 'gb' || unit === 'гб') return num;
-            if (unit === 'mb' || unit === 'мб') return num / 1024;
-            return 0;
-        } catch (e) { return null; }
+    /**
+     * Витягує перше число з рядка.
+     * Працює з: "Роздають: 383", "Bitrate: 8.92 Mbps", "15,5 ГБ"
+     */
+    function extractNumber(text) {
+        var match = (text || '').replace(',', '.').match(/\d+(\.\d+)?/);
+        return match ? parseFloat(match[0]) : 0;
     }
 
-    // Основна функція оновлення стилів у списку
-    function updateTorrentStyles() {
-        try {
-            // Обробка Сідів
-            document.querySelectorAll('.torrent-item__seeds span').forEach(function (span) {
-                var value = parseInt(span.textContent, 10) || 0;
-                span.classList.add('ts-seeds');
-                var tier = '';
-                if (value < TH.seeds.danger_below) tier = 'low-seeds';
-                else if (value >= TH.seeds.top_from) tier = 'high-seeds';
-                else if (value >= TH.seeds.good_from) tier = 'good-seeds';
-                span.classList.remove('low-seeds', 'good-seeds', 'high-seeds');
-                if (tier) span.classList.add(tier);
-            });
+    /**
+     * Основна функція оновлення стилів.
+     * Сканує блоки деталей торрента та вішає класи залежно від знайдених слів.
+     */
+    function updateStyles() {
+        // Проходимо по всіх div та span у контейнері деталей торрента
+        $('.torrent-item__details > div, .torrent-item__details > span').each(function () {
+            var $el = $(this);
+            var text = $el.text().toLowerCase(); // Перетворюємо на малі літери для ігнорування регістру
 
-            // Обробка Розміру
-            document.querySelectorAll('.torrent-item__size').forEach(function (el) {
-                var gb = tsParseSizeToGb(el.textContent);
-                el.classList.add('ts-size');
-                var tier = '';
-                if (gb > TH.size.top_from_gb) tier = 'top-size';
-                else if (gb >= TH.size.high_from_gb) tier = 'high-size';
-                else if (gb >= TH.size.mid_from_gb) tier = 'mid-size';
-                el.classList.remove('mid-size', 'high-size', 'top-size');
-                if (tier) el.classList.add(tier);
-            });
-        } catch (e) { console.error('Torrent Styles Error:', e); }
+            // 1. РОЗДАЮТЬ / SEEDS
+            if (text.indexOf('роздають') !== -1 || text.indexOf('seeds') !== -1) {
+                var val = extractNumber(text);
+                $el.addClass('ts-badge ts-seeds').removeClass('low high');
+                if (val < 5) $el.addClass('low');
+                else if (val > 50) $el.addClass('high');
+            }
+
+            // 2. КАЧАЮТЬ / LEECHERS / PEERS
+            else if (text.indexOf('качають') !== -1 || text.indexOf('leechers') !== -1 || text.indexOf('peers') !== -1) {
+                $el.addClass('ts-badge ts-grabs');
+            }
+
+            // 3. БІТРЕЙТ / BITRATE
+            else if (text.indexOf('бітрейт') !== -1 || text.indexOf('bitrate') !== -1) {
+                $el.addClass('ts-badge ts-bitrate');
+            }
+
+            // 4. ГБ / GB / ТБ / TB (Розмір файлу)
+            else if (text.indexOf('гб') !== -1 || text.indexOf('gb') !== -1 || text.indexOf('тб') !== -1 || text.indexOf('tb') !== -1) {
+                $el.addClass('ts-badge ts-size');
+            }
+        });
     }
 
     /* --- Впровадження та ініціалізація --- */
-
-    function injectStyles() {
-        var css = Object.keys(styles).map(function (sel) {
-            var rules = Object.keys(styles[sel]).map(function (p) { return p + ': ' + styles[sel][p] + ' !important'; }).join('; ');
-            return sel + ' { ' + rules + ' }';
-        }).join('\n');
-        var styleTag = document.createElement('style');
-        styleTag.innerHTML = css;
-        document.head.appendChild(styleTag);
-    }
-
-    var timer = null;
-    function scheduleUpdate() {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(updateTorrentStyles, TH.debounce_ms);
-    }
-
     function init() {
-        injectStyles();
+        // MutationObserver стежить за появою нових торрентів у списку
+        var observer = new MutationObserver(function() {
+            setTimeout(updateStyles, 100);
+        });
         
-        // Стежимо за появою нових торрентів у списку
-        var observer = new MutationObserver(scheduleUpdate);
         observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-        // Реєстрація плагіна в системі Lampa
-        if (typeof Lampa !== 'undefined') {
+        
+        // Реєстрація плагіна в Lampa
+        if (window.Lampa) {
             Lampa.Manifest.plugins = Lampa.Manifest.plugins || {};
-            Lampa.Manifest.plugins[config.pluginId] = pluginManifest;
+            Lampa.Manifest.plugins['torrent_styles_mod'] = pluginManifest;
         }
         
-        console.log('Torrent Styles Mod Loaded');
+        updateStyles(); // Запуск при ініціалізації
     }
 
-    if (window.appready) init();
-    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') init(); });
+    // Запуск після готовності додатку
+    if (window.appready) {
+        init();
+    } else {
+        Lampa.Listener.follow('app', function (e) {
+            if (e.type === 'ready') init();
+        });
+    }
 
 })();
