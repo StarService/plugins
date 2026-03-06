@@ -24,13 +24,16 @@
     var Q_CACHE_TIME = 24 * 60 * 60 * 1000;                            // Кешуємо результат на 24 години
     var QUALITY_CACHE = 'star_ratings_quality_cache';                  // Унікальний ключ кешу (замінено на star)
     var JACRED_PROTOCOL = 'https://';                                  // Використовуємо захищений протокол
-    var JACRED_URL = Lampa.Storage.get('jacred.xyz') || 'jac.red';  // Пряма адреса джерела метаданих
+    var JACRED_URL = Lampa.Storage.get('jacred.xyz') || 'jac.red';     // Пряма адреса джерела метаданих
     var PROXY_TIMEOUT = 5000;                                          // Максимальний час очікування відповіді
     
     /* Список проксі-серверів для обходу CORS обмежень браузера */
     var PROXY_LIST = [
-        'https://api.allorigins.win/raw?url=',
-        'https://cors.bwa.workers.dev/'
+        'https://api.allorigins.win/raw?url=',        // Найнадійніший
+        'https://cors.bwa.workers.dev/',              // Приватний
+		'https://cors-proxy.htmldriven.com/?url=',    // Хороша альтернатива
+        'https://thingproxy.freeboard.io/fetch/',     // Стабільний, але повільний
+        'https://cors.proxy.consumers.org.ua/?url='   // Локальний швидкий проксі
     ];
 
     /* --- Стилізація (Преміальний дизайн) --- 
