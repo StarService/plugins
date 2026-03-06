@@ -24,7 +24,7 @@
     var Q_CACHE_TIME = 24 * 60 * 60 * 1000;                            // Кешуємо результат на 24 години
     var QUALITY_CACHE = 'star_ratings_quality_cache';                  // Унікальний ключ кешу (замінено на star)
     var JACRED_PROTOCOL = 'https://';                                  // Використовуємо захищений протокол
-    var JACRED_URL = Lampa.Storage.get('jacred.xyz') || 'jacred.xyz';  // Пряма адреса джерела метаданих
+    var JACRED_URL = Lampa.Storage.get('jacred.xyz') || 'jac.red';  // Пряма адреса джерела метаданих
     var PROXY_TIMEOUT = 5000;                                          // Максимальний час очікування відповіді
     
     /* Список проксі-серверів для обходу CORS обмежень браузера */
